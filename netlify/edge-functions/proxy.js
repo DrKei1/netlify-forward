@@ -1,21 +1,17 @@
 export default async (request, context) => {
   const targetHost = "77.68.22.95";
   const url = new URL(request.url);
+  
+  // هدایت تمام درخواست‌ها به آی‌پی آلمان روی پورت 80 با حفظ مسیر و پارامترها
   const targetUrl = `http://${targetHost}:80${url.pathname}${url.search}`;
 
   const headers = new Headers(request.headers);
   headers.set("host", targetHost);
   
-  // حذف هدرهای سنگین نت‌لیفای که باعث ارور ۴۰۰ در سرور می‌شوند
+  // حذف هدرهای مزاحم نت‌لیفای
   const headersToDelete = [
-    "x-nf-blobs-info", 
-    "x-nf-deploy-context", 
-    "x-nf-deploy-id", 
-    "x-nf-edge-function-log-token", 
-    "x-nf-request-id",
-    "x-nf-trace-span-id",
-    "cdn-loop",
-    "netlify-agent-category"
+    "x-nf-blobs-info", "x-nf-deploy-context", "x-nf-deploy-id", 
+    "x-nf-edge-function-log-token", "x-nf-request-id", "x-nf-trace-span-id"
   ];
   headersToDelete.forEach(h => headers.delete(h));
 
@@ -23,7 +19,7 @@ export default async (request, context) => {
     const response = await fetch(targetUrl, {
       method: request.method,
       headers: headers,
-      body: request.body,
+      body: request.body, // انتقال کامل دیتای VLESS
       redirect: "manual",
     });
 
