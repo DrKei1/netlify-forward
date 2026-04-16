@@ -1,3 +1,7 @@
 [[edge_functions]]
-  path = "/*"
+  path = "/vless"
+  function = "proxy"
+
+[[edge_functions]]
+  path = "/vless/*"
   function = "proxy"
