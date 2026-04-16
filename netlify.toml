@@ -1,11 +1,5 @@
 [[redirects]]
-  from = "/xhttp"
-  to = "/.netlify/functions/proxy"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/xhttp/*"
+  from = "/hu"
   to = "/.netlify/functions/proxy"
   status = 200
   force = true
