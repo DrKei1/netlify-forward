@@ -1,37 +1,58 @@
 export default async (request, context) => {
-  const targetHost = "77.68.22.95";
+  // آدرس سرور x-ui تو - پورت رو با پورت اینباندت عوض کن
+  const TARGET_HOST = "77.68.22.95";  // آدرس IP سرورت (مطمئن شو IP درسته)
+  const TARGET_PORT = "10001";         // پورت اینباند x-ui
+  const TARGET_PATH = "/vless";        // WebSocket path
+
   const url = new URL(request.url);
-  const targetUrl = `http://${targetHost}:80${url.pathname}${url.search}`;
+  const upgradeHeader = request.headers.get("Upgrade");
 
-  const headers = new Headers(request.headers);
-  headers.set("host", targetHost);
-  
-  // حذف هدرهای اضافی نت‌لیفای برای جلوگیری از ریجکت شدن توسط سرور
-  const headersToDelete = [
-    "x-nf-blobs-info", "x-nf-deploy-context", "x-nf-deploy-id", 
-    "x-nf-edge-function-log-token", "x-nf-request-id", "x-nf-trace-span-id",
-    "cdn-loop", "x-nf-purge-api-token"
-  ];
-  headersToDelete.forEach(h => headers.delete(h));
+  // اگه WebSocket upgrade request بود
+  if (upgradeHeader === "websocket") {
+    const targetUrl = `ws://${TARGET_HOST}:${TARGET_PORT}${TARGET_PATH}`;
 
-  try {
-    const response = await fetch(targetUrl, {
-      method: request.method,
-      headers: headers,
-      body: request.body,
-      redirect: "manual",
-    });
+    // اتصال به سرور x-ui
+    const { socket: clientSocket, response } = Deno.upgradeWebSocket(request);
 
-    const newHeaders = new Headers(response.headers);
-    newHeaders.set("X-Accel-Buffering", "no");
+    // WebSocket به سمت سرور
+    const serverSocket = new WebSocket(targetUrl);
+    serverSocket.binaryType = "arraybuffer";
 
-    return new Response(response.body, {
-      status: response.status,
-      headers: newHeaders,
-    });
-  } catch (e) {
-    return new Response("Bridge Error: " + e.message, { status: 502 });
+    serverSocket.onopen = () => {
+      clientSocket.onmessage = (event) => {
+        if (serverSocket.readyState === WebSocket.OPEN) {
+          serverSocket.send(event.data);
+        }
+      };
+    };
+
+    serverSocket.onmessage = (event) => {
+      if (clientSocket.readyState === WebSocket.OPEN) {
+        clientSocket.send(event.data);
+      }
+    };
+
+    serverSocket.onerror = (err) => {
+      console.error("Server socket error:", err);
+      clientSocket.close();
+    };
+
+    serverSocket.onclose = () => {
+      clientSocket.close();
+    };
+
+    clientSocket.onerror = (err) => {
+      console.error("Client socket error:", err);
+      serverSocket.close();
+    };
+
+    clientSocket.onclose = () => {
+      serverSocket.close();
+    };
+
+    return response;
   }
-};
 
-export const config = { path: "/*" };
+  // برای درخواست‌های HTTP معمولی
+  return new Response("OK", { status: 200 });
+};
