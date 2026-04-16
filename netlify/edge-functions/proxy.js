@@ -1,58 +1,45 @@
-export default async (request, context) => {
-  // آدرس سرور x-ui تو - پورت رو با پورت اینباندت عوض کن
-  const TARGET_HOST = "77.68.22.95";  // آدرس IP سرورت (مطمئن شو IP درسته)
-  const TARGET_PORT = "10001";         // پورت اینباند x-ui
-  const TARGET_PATH = "/vless";        // WebSocket path
+const TARGET_HOST = "77.68.22.95";
+const TARGET_PORT = "10002";
+const TARGET_PATH = "/xhttp";
 
+export default async (request) => {
   const url = new URL(request.url);
-  const upgradeHeader = request.headers.get("Upgrade");
+  const targetUrl = `http://${TARGET_HOST}:${TARGET_PORT}${TARGET_PATH}${url.search}`;
 
-  // اگه WebSocket upgrade request بود
-  if (upgradeHeader === "websocket") {
-    const targetUrl = `ws://${TARGET_HOST}:${TARGET_PORT}${TARGET_PATH}`;
-
-    // اتصال به سرور x-ui
-    const { socket: clientSocket, response } = Deno.upgradeWebSocket(request);
-
-    // WebSocket به سمت سرور
-    const serverSocket = new WebSocket(targetUrl);
-    serverSocket.binaryType = "arraybuffer";
-
-    serverSocket.onopen = () => {
-      clientSocket.onmessage = (event) => {
-        if (serverSocket.readyState === WebSocket.OPEN) {
-          serverSocket.send(event.data);
-        }
-      };
-    };
-
-    serverSocket.onmessage = (event) => {
-      if (clientSocket.readyState === WebSocket.OPEN) {
-        clientSocket.send(event.data);
-      }
-    };
-
-    serverSocket.onerror = (err) => {
-      console.error("Server socket error:", err);
-      clientSocket.close();
-    };
-
-    serverSocket.onclose = () => {
-      clientSocket.close();
-    };
-
-    clientSocket.onerror = (err) => {
-      console.error("Client socket error:", err);
-      serverSocket.close();
-    };
-
-    clientSocket.onclose = () => {
-      serverSocket.close();
-    };
-
-    return response;
+  // کپی کردن همه هدرها به جز host
+  const headers = new Headers();
+  for (const [key, value] of request.headers.entries()) {
+    if (key.toLowerCase() !== "host") {
+      headers.set(key, value);
+    }
   }
+  headers.set("host", TARGET_HOST);
 
-  // برای درخواست‌های HTTP معمولی
-  return new Response("OK", { status: 200 });
+  try {
+    const response = await fetch(targetUrl, {
+      method: request.method,
+      headers: headers,
+      body: request.method !== "GET" && request.method !== "HEAD" 
+        ? request.body 
+        : null,
+      duplex: "half",
+    });
+
+    const responseHeaders = new Headers();
+    for (const [key, value] of response.headers.entries()) {
+      responseHeaders.set(key, value);
+    }
+
+    return new Response(response.body, {
+      status: response.status,
+      headers: responseHeaders,
+    });
+
+  } catch (err) {
+    return new Response(`Error: ${err.message}`, { status: 502 });
+  }
+};
+
+export const config = {
+  path: ["/xhttp", "/xhttp/*"],
 };
